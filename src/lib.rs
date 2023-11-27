@@ -41,6 +41,8 @@
 #![no_std]
 #![deny(missing_docs)]
 
+use borsh::{BorshSerialize,BorshDeserialize};
+
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -297,7 +299,7 @@ fn right_encode(len: usize) -> EncodedLen {
     EncodedLen { offset, buffer }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone,BorshSerialize, BorshDeserialize)]
 struct Buffer([u64; WORDS]);
 
 impl Buffer {
@@ -359,12 +361,13 @@ trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize)]
 enum Mode {
     Absorbing,
     Squeezing,
 }
 
+#[derive(BorshSerialize, BorshDeserialize)]
 struct KeccakState<P> {
     buffer: Buffer,
     offset: usize,
