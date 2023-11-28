@@ -299,7 +299,7 @@ fn right_encode(len: usize) -> EncodedLen {
     EncodedLen { offset, buffer }
 }
 
-#[derive(Default, Clone,BorshSerialize, BorshDeserialize)]
+#[derive(Default, Debug, Clone,BorshSerialize, BorshDeserialize)]
 struct Buffer([u64; WORDS]);
 
 impl Buffer {
@@ -361,13 +361,13 @@ trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, Copy, BorshSerialize, BorshDeserialize)]
 enum Mode {
     Absorbing,
     Squeezing,
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 struct KeccakState<P> {
     buffer: Buffer,
     offset: usize,

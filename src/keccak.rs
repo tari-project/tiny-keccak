@@ -12,7 +12,7 @@ use borsh::{BorshSerialize,BorshDeserialize};
 /// ```
 ///
 /// [`Keccak SHA3 submission`]: https://keccak.team/files/Keccak-submission-3.pdf
-#[derive(Clone,BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug,BorshSerialize, BorshDeserialize)]
 pub struct Keccak {
     state: KeccakState<KeccakF>,
 }
