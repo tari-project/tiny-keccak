@@ -18,5 +18,4 @@ compile_error!(
     tiny-keccak = { version = \"2.0.0\", features = [\"sha3\"] }"
 );
 
-fn main() {
-}
+fn main() {}

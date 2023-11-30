@@ -41,6 +41,9 @@
 #![no_std]
 #![deny(missing_docs)]
 
+use borsh::io;
+use borsh::io::Write;
+use borsh::{BorshDeserialize, BorshSerialize};
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -197,6 +200,9 @@ mod parallel_hash;
 #[cfg(feature = "parallel_hash")]
 pub use parallel_hash::{ParallelHash, ParallelHashXof};
 
+#[cfg(test)]
+use quickcheck::{Arbitrary, Gen};
+
 /// A trait for hashing an arbitrary stream of bytes.
 ///
 /// # Example
@@ -297,8 +303,9 @@ fn right_encode(len: usize) -> EncodedLen {
     EncodedLen { offset, buffer }
 }
 
-#[derive(Default, Clone)]
-struct Buffer([u64; WORDS]);
+/// internal buffer for hashing keccak
+#[derive(Default, Debug, Clone)]
+pub struct Buffer([u64; WORDS]);
 
 impl Buffer {
     fn words(&mut self) -> &mut [u64; WORDS] {
@@ -355,23 +362,92 @@ impl Buffer {
     }
 }
 
+#[cfg(test)]
+impl Arbitrary for Buffer {
+    fn arbitrary(g: &mut Gen) -> Self {
+        let mut buf = [0u64; WORDS];
+        for i in 0..WORDS {
+            buf[i] = u64::arbitrary(g);
+        }
+        Buffer(buf)
+    }
+}
+
+impl BorshSerialize for Buffer {
+    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        for word in self.0 {
+            BorshSerialize::serialize(&word, writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for Buffer {
+    fn deserialize_reader<R>(reader: &mut R) -> Result<Self, io::Error>
+    where
+        R: io::Read,
+    {
+        let mut buf = [0u64; WORDS];
+        for i in 0..WORDS {
+            buf[i] = BorshDeserialize::deserialize_reader(reader)?;
+        }
+        Ok(Self(buf))
+    }
+}
+
 trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
-#[derive(Clone, Copy)]
-enum Mode {
-    Absorbing,
-    Squeezing,
+/// internal hashing mode for keccak
+#[derive(Clone, Debug, Copy, BorshSerialize, BorshDeserialize)]
+#[borsh(use_discriminant = true)]
+#[repr(u8)]
+pub enum Mode {
+    /// absorbing state
+    Absorbing = 1u8,
+    /// squeezing state
+    Squeezing = 2u8,
 }
 
+#[derive(Debug)]
 struct KeccakState<P> {
     buffer: Buffer,
-    offset: usize,
-    rate: usize,
+    offset: u8,
+    rate: u8,
     delim: u8,
     mode: Mode,
     permutation: core::marker::PhantomData<P>,
+}
+
+impl<P> BorshSerialize for KeccakState<P> {
+    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        BorshSerialize::serialize(&self.buffer, writer)?;
+        BorshSerialize::serialize(&self.offset, writer)?;
+        BorshSerialize::serialize(&self.rate, writer)?;
+        BorshSerialize::serialize(&self.mode, writer)?;
+        Ok(())
+    }
+}
+
+impl<P> BorshDeserialize for KeccakState<P> {
+    fn deserialize_reader<R>(reader: &mut R) -> Result<Self, io::Error>
+    where
+        R: io::Read,
+    {
+        let buffer = BorshDeserialize::deserialize_reader(reader)?;
+        let offset = BorshDeserialize::deserialize_reader(reader)?;
+        let rate = BorshDeserialize::deserialize_reader(reader)?;
+        let mode = BorshDeserialize::deserialize_reader(reader)?;
+        Ok(Self {
+            buffer,
+            offset,
+            rate,
+            delim: 0x01,
+            mode,
+            permutation: core::marker::PhantomData,
+        })
+    }
 }
 
 impl<P> Clone for KeccakState<P> {
@@ -388,7 +464,7 @@ impl<P> Clone for KeccakState<P> {
 }
 
 impl<P: Permutation> KeccakState<P> {
-    fn new(rate: usize, delim: u8) -> Self {
+    fn new(rate: u8, delim: u8) -> Self {
         assert!(rate != 0, "rate cannot be equal 0");
         KeccakState {
             buffer: Buffer::default(),
@@ -399,40 +475,58 @@ impl<P: Permutation> KeccakState<P> {
             permutation: core::marker::PhantomData,
         }
     }
+    #[cfg(test)]
+    pub fn new_with(buffer: Buffer, offset: u8, rate: u8, delim: u8, mode: Mode) -> Self {
+        KeccakState {
+            buffer,
+            offset,
+            rate,
+            delim,
+            mode,
+            permutation: core::marker::PhantomData,
+        }
+    }
 
     fn keccak(&mut self) {
         P::execute(&mut self.buffer);
     }
 
     fn update(&mut self, input: &[u8]) {
+        if self.rate >= 200 || self.rate <= 1 || self.rate <= self.offset {
+            return;
+        }
         if let Mode::Squeezing = self.mode {
             self.mode = Mode::Absorbing;
             self.fill_block();
         }
-
         //first foldp
         let mut ip = 0;
         let mut l = input.len();
-        let mut rate = self.rate - self.offset;
-        let mut offset = self.offset;
-        while l >= rate {
+        let mut rate = (self.rate - self.offset) as usize;
+        let mut offset = self.offset as usize;
+        while l >= rate as usize {
             self.buffer.xorin(&input[ip..], offset, rate);
             self.keccak();
             ip += rate;
             l -= rate;
-            rate = self.rate;
+            rate = self.rate as usize;
             offset = 0;
         }
 
         self.buffer.xorin(&input[ip..], offset, l);
-        self.offset = offset + l;
+        // rate is less than 255 which is u8max, offset + l is smaller than rate.
+        self.offset = (offset + l) as u8;
     }
 
     fn pad(&mut self) {
-        self.buffer.pad(self.offset, self.delim, self.rate);
+        self.buffer
+            .pad(self.offset as usize, self.delim, self.rate as usize);
     }
 
     fn squeeze(&mut self, output: &mut [u8]) {
+        if self.rate >= 200 || self.rate <= 1 || self.rate <= self.offset {
+            return;
+        }
         if let Mode::Absorbing = self.mode {
             self.mode = Mode::Squeezing;
             self.pad();
@@ -442,19 +536,19 @@ impl<P: Permutation> KeccakState<P> {
         // second foldp
         let mut op = 0;
         let mut l = output.len();
-        let mut rate = self.rate - self.offset;
-        let mut offset = self.offset;
+        let mut rate = (self.rate - self.offset) as usize;
+        let mut offset = self.offset as usize;
         while l >= rate {
             self.buffer.setout(&mut output[op..], offset, rate);
             self.keccak();
             op += rate;
             l -= rate;
-            rate = self.rate;
+            rate = self.rate as usize;
             offset = 0;
         }
 
         self.buffer.setout(&mut output[op..], offset, l);
-        self.offset = offset + l;
+        self.offset = (offset + l) as u8;
     }
 
     fn finalize(mut self, output: &mut [u8]) {
@@ -473,8 +567,9 @@ impl<P: Permutation> KeccakState<P> {
     }
 }
 
-fn bits_to_rate(bits: usize) -> usize {
-    200 - bits / 4
+fn bits_to_rate(bits: u16) -> u8 {
+    //max size is 512 -> (200-512/4)<255
+    (200u16.saturating_sub(bits / 4)) as u8
 }
 
 #[cfg(test)]
@@ -497,5 +592,51 @@ mod tests {
         assert_eq!(right_encode(65536).value(), &[1, 0, 0, 3]);
         assert_eq!(right_encode(4096).value(), &[16, 0, 2]);
         assert_eq!(right_encode(54321).value(), &[212, 49, 2]);
+    }
+
+    mod quicktest {
+        use crate::{Buffer, Hasher, Keccak, Mode};
+        use quickcheck::{quickcheck, Arbitrary, Gen};
+
+        #[derive(Clone, Debug)]
+
+        struct Data([u8; 25]);
+
+        impl Data {
+            pub fn as_slice(&self) -> &[u8] {
+                &self.0
+            }
+        }
+        impl Arbitrary for Data {
+            fn arbitrary(g: &mut Gen) -> Data {
+                let mut buf = [0u8; 25];
+                for i in 0..25 {
+                    buf[i] = u8::arbitrary(g);
+                }
+                Data(buf)
+            }
+        }
+        #[test]
+        fn test_ser_deserialize() {
+            fn test_hashing_a(buffer: Buffer, offset: u8, rate: u8, hash: Data) -> bool {
+                let mode = Mode::Absorbing;
+                let mut keccak = Keccak::new_with(buffer, offset, rate, mode);
+                keccak.update(hash.as_slice());
+                let mut out: [u8; 32] = [0; 32];
+                keccak.finalize(&mut out);
+                true
+            }
+
+            fn test_hashing_s(buffer: Buffer, offset: u8, rate: u8, hash: Data) -> bool {
+                let mode = Mode::Squeezing;
+                let mut keccak = Keccak::new_with(buffer, offset, rate, mode);
+                keccak.update(hash.as_slice());
+                let mut out: [u8; 32] = [0; 32];
+                keccak.finalize(&mut out);
+                true
+            }
+            quickcheck(test_hashing_a as fn(Buffer, u8, u8, Data) -> bool);
+            quickcheck(test_hashing_s as fn(Buffer, u8, u8, Data) -> bool);
+        }
     }
 }

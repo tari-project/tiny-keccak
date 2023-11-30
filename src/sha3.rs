@@ -65,7 +65,7 @@ impl Sha3 {
         Sha3::new(512)
     }
 
-    fn new(bits: usize) -> Sha3 {
+    fn new(bits: u16) -> Sha3 {
         Sha3 {
             state: KeccakState::new(bits_to_rate(bits), Self::DELIM),
         }
