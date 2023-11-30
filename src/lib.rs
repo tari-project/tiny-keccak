@@ -569,7 +569,7 @@ impl<P: Permutation> KeccakState<P> {
 
 fn bits_to_rate(bits: u16) -> u8 {
     //max size is 512 -> (200-512/4)<255
-    (200 - bits / 4) as u8
+    (200u16.saturating_sub(bits / 4)) as u8
 }
 
 #[cfg(test)]
