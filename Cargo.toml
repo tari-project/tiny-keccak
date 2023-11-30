@@ -15,6 +15,9 @@ categories = ["cryptography", "no-std"]
 crunchy = "0.2.2"
 borsh = { version = "1.2", features = ["derive"]}
 
+[dev-dependencies]
+quickcheck = "1.0"
+
 [profile.dev]
 opt-level = 3  # Controls the --opt-level the compiler builds with
 debug = false   # Controls whether the compiler passes `-g`

@@ -1,6 +1,8 @@
 //! The `Keccak` hash functions.
 
 use super::{bits_to_rate, keccakf::KeccakF, Hasher, KeccakState};
+#[cfg(test)]
+use super::{Buffer, Mode};
 use borsh::{BorshDeserialize, BorshSerialize};
 /// The `Keccak` hash functions defined in [`Keccak SHA3 submission`].
 ///
@@ -32,6 +34,14 @@ impl Keccak {
     /// [`Keccak`]: struct.Keccak.html
     pub fn v256() -> Keccak {
         Keccak::new(256)
+    }
+
+    #[cfg(test)]
+    /// Creates a new [`Keccak`] hasher with the following state
+    pub fn new_with(buffer: Buffer, offset: u8, rate: u8, mode: Mode) -> Keccak {
+        Keccak {
+            state: KeccakState::new_with(buffer, offset, rate, Self::DELIM, mode),
+        }
     }
 
     /// Creates  new [`Keccak`] hasher with a security level of 384 bits.
