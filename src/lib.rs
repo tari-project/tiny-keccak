@@ -386,16 +386,17 @@ trait Permutation {
 
 #[derive(Clone, Debug, Copy, BorshSerialize, BorshDeserialize)]
 #[borsh(use_discriminant = true)]
+#[repr(u8)]
 enum Mode {
-    Absorbing = 1,
-    Squeezing = 2,
+    Absorbing = 1u8,
+    Squeezing = 2u8,
 }
 
 #[derive(Debug)]
 struct KeccakState<P> {
     buffer: Buffer,
-    offset: usize,
-    rate: usize,
+    offset: u8,
+    rate: u8,
     delim: u8,
     mode: Mode,
     permutation: core::marker::PhantomData<P>,
@@ -447,7 +448,7 @@ impl<P> Clone for KeccakState<P> {
 }
 
 impl<P: Permutation> KeccakState<P> {
-    fn new(rate: usize, delim: u8) -> Self {
+    fn new(rate: u8, delim: u8) -> Self {
         assert!(rate != 0, "rate cannot be equal 0");
         KeccakState {
             buffer: Buffer::default(),
@@ -472,23 +473,25 @@ impl<P: Permutation> KeccakState<P> {
         //first foldp
         let mut ip = 0;
         let mut l = input.len();
-        let mut rate = self.rate - self.offset;
-        let mut offset = self.offset;
-        while l >= rate {
+        let mut rate = (self.rate - self.offset) as usize;
+        let mut offset = self.offset as usize;
+        while l >= rate as usize {
             self.buffer.xorin(&input[ip..], offset, rate);
             self.keccak();
             ip += rate;
             l -= rate;
-            rate = self.rate;
+            rate = self.rate as usize;
             offset = 0;
         }
 
         self.buffer.xorin(&input[ip..], offset, l);
-        self.offset = offset + l;
+        // rate is less than 255 which is u8max, offset + l is smaller than rate.
+        self.offset = (offset + l) as u8;
     }
 
     fn pad(&mut self) {
-        self.buffer.pad(self.offset, self.delim, self.rate);
+        self.buffer
+            .pad(self.offset as usize, self.delim, self.rate as usize);
     }
 
     fn squeeze(&mut self, output: &mut [u8]) {
@@ -501,19 +504,19 @@ impl<P: Permutation> KeccakState<P> {
         // second foldp
         let mut op = 0;
         let mut l = output.len();
-        let mut rate = self.rate - self.offset;
-        let mut offset = self.offset;
+        let mut rate = (self.rate - self.offset) as usize;
+        let mut offset = self.offset as usize;
         while l >= rate {
             self.buffer.setout(&mut output[op..], offset, rate);
             self.keccak();
             op += rate;
             l -= rate;
-            rate = self.rate;
+            rate = self.rate as usize;
             offset = 0;
         }
 
         self.buffer.setout(&mut output[op..], offset, l);
-        self.offset = offset + l;
+        self.offset = (offset + l) as u8;
     }
 
     fn finalize(mut self, output: &mut [u8]) {
@@ -532,8 +535,9 @@ impl<P: Permutation> KeccakState<P> {
     }
 }
 
-fn bits_to_rate(bits: usize) -> usize {
-    200 - bits / 4
+fn bits_to_rate(bits: u16) -> u8 {
+    //max size is 512 -> (200-512/4)<255
+    (200 - bits / 4) as u8
 }
 
 #[cfg(test)]

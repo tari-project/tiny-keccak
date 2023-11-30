@@ -51,7 +51,7 @@ impl Suboutout {
 pub struct ParallelHash {
     state: CShake,
     block_size: usize,
-    bits: usize,
+    bits: u16,
     blocks: usize,
     unfinished: Option<UnfinishedState>,
 }
@@ -71,7 +71,7 @@ impl ParallelHash {
         ParallelHash::new(custom_string, block_size, 256)
     }
 
-    fn new(custom_string: &[u8], block_size: usize, bits: usize) -> ParallelHash {
+    fn new(custom_string: &[u8], block_size: usize, bits: u16) -> ParallelHash {
         let mut state = CShake::new(b"ParallelHash", custom_string, bits);
         state.update(left_encode(block_size).value());
         ParallelHash {
@@ -92,7 +92,7 @@ impl Hasher for ParallelHash {
                 unfinished.state.update(&input[..to_absorb]);
                 input = &input[to_absorb..];
 
-                let mut suboutput = Suboutout::security(self.bits);
+                let mut suboutput = Suboutout::security(self.bits as usize);
                 unfinished.state.finalize(suboutput.as_bytes_mut());
                 self.state.update(suboutput.as_bytes());
                 self.blocks += 1;
@@ -111,7 +111,7 @@ impl Hasher for ParallelHash {
         let parts = input_blocks.chunks(self.block_size).map(|chunk| {
             let mut state = CShake::new(b"", b"", bits);
             state.update(chunk);
-            let mut suboutput = Suboutout::security(bits);
+            let mut suboutput = Suboutout::security(bits as usize);
             state.finalize(suboutput.as_bytes_mut());
             suboutput
         });
@@ -134,7 +134,7 @@ impl Hasher for ParallelHash {
 
     fn finalize(mut self, output: &mut [u8]) {
         if let Some(unfinished) = self.unfinished.take() {
-            let mut suboutput = Suboutout::security(self.bits);
+            let mut suboutput = Suboutout::security(self.bits as usize);
             unfinished.state.finalize(suboutput.as_bytes_mut());
             self.state.update(suboutput.as_bytes());
             self.blocks += 1;
@@ -186,7 +186,7 @@ impl IntoXof for ParallelHash {
 
     fn into_xof(mut self) -> Self::Xof {
         if let Some(unfinished) = self.unfinished.take() {
-            let mut suboutput = Suboutout::security(self.bits);
+            let mut suboutput = Suboutout::security(self.bits as usize);
             unfinished.state.finalize(suboutput.as_bytes_mut());
             self.state.update(suboutput.as_bytes());
             self.blocks += 1;

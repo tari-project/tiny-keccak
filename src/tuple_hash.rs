@@ -36,7 +36,7 @@ impl TupleHash {
         TupleHash::new(custom_string, 256)
     }
 
-    fn new(custom_string: &[u8], bits: usize) -> TupleHash {
+    fn new(custom_string: &[u8], bits: u16) -> TupleHash {
         TupleHash {
             state: CShake::new(b"TupleHash", custom_string, bits),
         }

@@ -32,7 +32,7 @@ impl Shake {
         Shake::new(256)
     }
 
-    pub(crate) fn new(bits: usize) -> Shake {
+    pub(crate) fn new(bits: u16) -> Shake {
         Shake {
             state: KeccakState::new(bits_to_rate(bits), Self::DELIM),
         }

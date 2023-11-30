@@ -1,6 +1,6 @@
 //! The `Keccak` hash functions.
 
-use super::{bits_to_rate, keccakf::KeccakF, Buffer, Hasher, KeccakState};
+use super::{bits_to_rate, keccakf::KeccakF, Hasher, KeccakState};
 use borsh::{BorshDeserialize, BorshSerialize};
 /// The `Keccak` hash functions defined in [`Keccak SHA3 submission`].
 ///
@@ -48,7 +48,7 @@ impl Keccak {
         Keccak::new(512)
     }
 
-    fn new(bits: usize) -> Keccak {
+    fn new(bits: u16) -> Keccak {
         Keccak {
             state: KeccakState::new(bits_to_rate(bits), Self::DELIM),
         }

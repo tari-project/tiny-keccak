@@ -36,7 +36,7 @@ impl CShake {
         CShake::new(name, custom_string, 256)
     }
 
-    pub(crate) fn new(name: &[u8], custom_string: &[u8], bits: usize) -> CShake {
+    pub(crate) fn new(name: &[u8], custom_string: &[u8], bits: u16) -> CShake {
         let rate = bits_to_rate(bits);
         // if there is no name and no customization string
         // cSHAKE is SHAKE
@@ -46,7 +46,7 @@ impl CShake {
         }
 
         let mut state = KeccakState::new(rate, Self::DELIM);
-        state.update(left_encode(rate).value());
+        state.update(left_encode(rate as usize).value());
         state.update(left_encode(name.len() * 8).value());
         state.update(name);
         state.update(left_encode(custom_string.len() * 8).value());

@@ -42,10 +42,10 @@ impl Kmac {
         Kmac::new(key, custom_string, 256)
     }
 
-    fn new(key: &[u8], custom_string: &[u8], bits: usize) -> Kmac {
+    fn new(key: &[u8], custom_string: &[u8], bits: u16) -> Kmac {
         let rate = bits_to_rate(bits);
-        let mut state = CShake::new(b"KMAC", custom_string, bits);
-        state.update(left_encode(rate).value());
+        let mut state = CShake::new(b"KMAC", custom_string, bits as u16);
+        state.update(left_encode(rate as usize).value());
         state.update(left_encode(key.len() * 8).value());
         state.update(key);
         state.fill_block();
