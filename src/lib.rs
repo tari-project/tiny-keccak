@@ -41,8 +41,9 @@
 #![no_std]
 #![deny(missing_docs)]
 
-use borsh::{BorshSerialize,BorshDeserialize};
-
+use borsh::io;
+use borsh::io::Write;
+use borsh::{BorshDeserialize, BorshSerialize};
 const RHO: [u32; 24] = [
     1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44,
 ];
@@ -299,7 +300,7 @@ fn right_encode(len: usize) -> EncodedLen {
     EncodedLen { offset, buffer }
 }
 
-#[derive(Default, Debug, Clone,BorshSerialize, BorshDeserialize)]
+#[derive(Default, Debug, Clone)]
 struct Buffer([u64; WORDS]);
 
 impl Buffer {
@@ -357,17 +358,40 @@ impl Buffer {
     }
 }
 
+impl BorshSerialize for Buffer {
+    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        for word in self.0 {
+            BorshSerialize::serialize(&word, writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl BorshDeserialize for Buffer {
+    fn deserialize_reader<R>(reader: &mut R) -> Result<Self, io::Error>
+    where
+        R: io::Read,
+    {
+        let mut buf = [0u64; WORDS];
+        for i in 0..WORDS {
+            buf[i] = BorshDeserialize::deserialize_reader(reader)?;
+        }
+        Ok(Self(buf))
+    }
+}
+
 trait Permutation {
     fn execute(a: &mut Buffer);
 }
 
 #[derive(Clone, Debug, Copy, BorshSerialize, BorshDeserialize)]
+#[borsh(use_discriminant = true)]
 enum Mode {
-    Absorbing,
-    Squeezing,
+    Absorbing = 1,
+    Squeezing = 2,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Debug)]
 struct KeccakState<P> {
     buffer: Buffer,
     offset: usize,
@@ -375,6 +399,38 @@ struct KeccakState<P> {
     delim: u8,
     mode: Mode,
     permutation: core::marker::PhantomData<P>,
+}
+
+impl<P> BorshSerialize for KeccakState<P> {
+    fn serialize<W: Write>(&self, writer: &mut W) -> io::Result<()> {
+        BorshSerialize::serialize(&self.buffer, writer)?;
+        BorshSerialize::serialize(&self.offset, writer)?;
+        BorshSerialize::serialize(&self.rate, writer)?;
+        BorshSerialize::serialize(&self.delim, writer)?;
+        BorshSerialize::serialize(&self.mode, writer)?;
+        Ok(())
+    }
+}
+
+impl<P> BorshDeserialize for KeccakState<P> {
+    fn deserialize_reader<R>(reader: &mut R) -> Result<Self, io::Error>
+    where
+        R: io::Read,
+    {
+        let buffer = BorshDeserialize::deserialize_reader(reader)?;
+        let offset = BorshDeserialize::deserialize_reader(reader)?;
+        let rate = BorshDeserialize::deserialize_reader(reader)?;
+        let delim = BorshDeserialize::deserialize_reader(reader)?;
+        let mode = BorshDeserialize::deserialize_reader(reader)?;
+        Ok(Self {
+            buffer,
+            offset,
+            rate,
+            delim,
+            mode,
+            permutation: core::marker::PhantomData,
+        })
+    }
 }
 
 impl<P> Clone for KeccakState<P> {

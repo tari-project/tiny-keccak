@@ -1,7 +1,7 @@
 //! The `Keccak` hash functions.
 
-use super::{bits_to_rate, keccakf::KeccakF, Hasher, KeccakState, Buffer};
-use borsh::{BorshSerialize,BorshDeserialize};
+use super::{bits_to_rate, keccakf::KeccakF, Buffer, Hasher, KeccakState};
+use borsh::{BorshDeserialize, BorshSerialize};
 /// The `Keccak` hash functions defined in [`Keccak SHA3 submission`].
 ///
 /// # Usage
@@ -12,7 +12,7 @@ use borsh::{BorshSerialize,BorshDeserialize};
 /// ```
 ///
 /// [`Keccak SHA3 submission`]: https://keccak.team/files/Keccak-submission-3.pdf
-#[derive(Clone, Debug,BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Keccak {
     state: KeccakState<KeccakF>,
 }

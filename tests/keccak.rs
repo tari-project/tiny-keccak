@@ -1,5 +1,5 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use tiny_keccak::{Hasher, Keccak};
-use borsh::{BorshSerialize,BorshDeserialize};
 #[test]
 fn empty_keccak() {
     let keccak = Keccak::v256();
@@ -28,7 +28,6 @@ fn string_keccak_256() {
     keccak.finalize(&mut in_and_out);
     assert_eq!(expected, &in_and_out);
 }
-
 
 #[test]
 fn keccak_save() {
