@@ -1,4 +1,6 @@
-# tiny-keccak
+# Tari-tiny-keccak
+
+This is a fork of tiny-keccak and allows tari to serialize partly made hashes. 
 
 An implementation of Keccak derived functions specified in [`FIPS-202`], [`SP800-185`] and [`KangarooTwelve`].
 
